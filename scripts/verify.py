@@ -51,7 +51,7 @@ def check_reflection_edited(path: Path, problems: list[str]) -> bool:
     if not path.exists():
         problems.append(f"MISSING  submission/REFLECTION.md")
         return False
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     leftover = []
     for pattern in TEMPLATE_MARKERS:
         # Some patterns are line-anchored (start with ^), others are inline.
@@ -71,7 +71,7 @@ def check_active_model(active_json: Path, problems: list[str]) -> bool:
     if not check_file(active_json, "models/active.json", problems):
         return False
     try:
-        cfg = json.loads(active_json.read_text())
+        cfg = json.loads(active_json.read_text(encoding="utf-8"))
     except Exception as exc:
         problems.append(f"CORRUPT  models/active.json — {exc}")
         return False
@@ -92,7 +92,7 @@ def maybe_check_server(problems: list[str]) -> None:
         return
     try:
         r = httpx.post(
-            "http://localhost:8080/v1/chat/completions",
+            "http://localhost:8089/v1/chat/completions",
             json={
                 "model": "local",
                 "messages": [{"role": "user", "content": "ping"}],
@@ -101,10 +101,10 @@ def maybe_check_server(problems: list[str]) -> None:
             timeout=3.0,
         )
         if r.status_code == 200:
-            print("  ✓ llama-server reachable on :8080 — serving OpenAI-compat OK")
+            print("  ✓ llama-server reachable on :8089 — serving OpenAI-compat OK")
         else:
             problems.append(
-                f"WARN     llama-server on :8080 returned {r.status_code} — "
+                f"WARN     llama-server on :8089 returned {r.status_code} — "
                 f"check it before recording load-test screenshots"
             )
     except Exception:

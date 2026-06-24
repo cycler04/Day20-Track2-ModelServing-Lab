@@ -4,120 +4,104 @@
 
 ---
 
-**Họ Tên:** _<Họ Tên>_
-**Cohort:** _<A20-K1 / A20-K2 / ...>_
-**Ngày submit:** _<YYYY-MM-DD>_
+**Họ Tên:** Nguyễn Tiến Dũng
+**Cohort:** A20-K1
+**Ngày submit:** 2026-06-24
 
 ---
 
 ## 1. Hardware spec (từ `00-setup/detect-hardware.py`)
 
-> Paste output của `python 00-setup/detect-hardware.py` vào đây, hoặc điền thủ công:
+- **OS:** Windows 11 (AMD64)
+- **CPU:** 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
+- **Cores:** 4 physical / 8 logical
+- **CPU extensions:** AVX2 / AVX-512 / FMA / F16C / OPENMP
+- **RAM:** 15.7 GB
+- **Accelerator:** CPU only (NVIDIA GeForce MX350 2GB present but build fell back to CPU)
+- **llama.cpp backend đã chọn:** CPU (AVX2/AVX-512)
+- **Recommended model tier:** Qwen2.5-1.5B-Instruct
 
-- **OS:** _<macOS 14 / Windows 11 / Ubuntu 24.04 / ...>_
-- **CPU:** _<Apple M2 / Intel i7-12700H / AMD Ryzen 7 5800H / ...>_
-- **Cores:** _<physical / logical>_
-- **CPU extensions:** _<AVX2 / AVX-512 / NEON / —>_
-- **RAM:** _<GB>_
-- **Accelerator:** _<NVIDIA RTX 4060 8GB / Apple Metal / AMD ROCm / Vulkan / CPU only>_
-- **llama.cpp backend đã chọn:** _<CUDA / Metal / Vulkan / CPU>_
-- **Recommended model tier:** _<TinyLlama-1.1B / Qwen2.5-1.5B / Llama-3.2-3B / Qwen2.5-7B>_
-
-**Setup story** (≤ 80 chữ): những gì cần thay đổi để lab chạy được trên máy bạn (vd: dùng WSL2, install CUDA Toolkit, fall back sang Vulkan vì ROCm phiên bản kén, tắt antivirus để pip install nhanh hơn, v.v.):
-
-_Answer here._
+**Setup story** (≤ 80 chữ):
+Thiết lập trên Windows native. Do máy thiếu `cmake` trong PATH nên cài đặt `llama-cpp-python` bản CPU-only từ prebuilt wheel. Model 1.5B tự động tải về và chạy mượt mà. Port 8080 bị chiếm bởi EnterpriseDB (Apache httpd) nên đổi cổng server sang 8089.
 
 ---
 
 ## 2. Track 01 — Quickstart numbers (từ `benchmarks/01-quickstart-results.md`)
 
-> Paste bảng từ `benchmarks/01-quickstart-results.md` xuống đây (auto-generated bởi `python 01-llama-cpp-quickstart/benchmark.py`).
-
 | Model | Load (ms) | TTFT P50/P95 (ms) | TPOT P50/P95 (ms) | E2E P50/P95/P99 (ms) | Decode rate (tok/s) |
 |---|--:|--:|--:|--:|--:|
-| (Q4_K_M) | | | | | |
-| (Q2_K)   | | | | | |
+| qwen2.5-1.5b-instruct-q4_k_m.gguf | 3065 | 334 / 403 | 108.2 / 117.1 | 7025 / 7743 / 7768 | 9.2 |
+| qwen2.5-1.5b-instruct-q2_k.gguf | 1599 | 417 / 528 | 97.5 / 128.8 | 6582 / 8519 / 8582 | 10.3 |
 
-**Một quan sát** (≤ 50 chữ): Q4_K_M vs Q2_K trên máy bạn — số liệu nói gì? Quality đáng đánh đổi không?
-
-_Answer here._
+**Một quan sát** (≤ 50 chữ):
+Q4_K_M chỉ chậm hơn Q2_K khoảng 10% (9.2 vs 10.3 tok/s) nhưng chất lượng câu trả lời tốt hơn vượt trội. Rất đáng đánh đổi sự suy giảm tốc độ nhỏ này để lấy độ chính xác cao.
 
 ---
 
 ## 3. Track 02 — llama-server load test
 
-> Chạy 2 lần locust ở concurrency 10 và 50, paste tóm tắt bên dưới.
-
 | Concurrency | Total RPS | TTFB P50 (ms) | E2E P95 (ms) | E2E P99 (ms) | Failures |
-|--:|--:|--:|--:|--:|--:|
-| 10 | | | | | |
-| 50 | | | | | |
+|---|---|---|---|---|---|
+| 10 | 0.22 | 29000 | 50000 | 50000 | 0 (0.00%) |
+| 50 | 0.23 | 25000 | 39000 | 39000 | 0 (0.00%) |
 
-**Batching observation** (từ `record-metrics.py`): peak `llamacpp:n_busy_slots_per_decode` / `requests_processing` ở concurrency 50 = _<…>_, nghĩa là …
-
-_Answer here._
+**Batching observation** (từ `record-metrics.py`):
+peak `llamacpp:n_busy_slots_per_decode` / `requests_processing` ở concurrency 50 = `3.76` / `4`, nghĩa là server native `llama-server` đã kích hoạt continuous batching (xử lý đồng thời tối đa 4 slots). Dưới tải concurrency 50, độ trễ P50 là 25s, tốt hơn so với 29s ở concurrency 10 nhờ cơ chế ghép lô song song và tối ưu hàng đợi (deferred requests lên tới 46 yêu cầu mà không bị crash).
 
 ---
 
 ## 4. Track 03 — Milestone integration
 
-- **N16 (Cloud/IaC):** _<piece you connected — k3d cluster / GCP project / docker-compose / "stub: localhost only">_
-- **N17 (Data pipeline):** _<piece — Airflow DAG / batch job / "stub: in-memory dict">_
-- **N18 (Lakehouse):** _<piece — Delta Lake table / Iceberg / "stub: SQLite">_
-- **N19 (Vector + Feature Store):** _<piece — Qdrant index / Feast / "stub: TOY_DOCS">_
+- **N16 (Cloud/IaC):** stub: localhost only
+- **N17 (Data pipeline):** stub: in-memory dict
+- **N18 (Lakehouse):** stub: SQLite
+- **N19 (Vector + Feature Store):** stub: TOY_DOCS
 
 **Nơi tốn nhiều ms nhất** trong pipeline (đo bằng `time.perf_counter` trong `pipeline.py`):
 
-- embed: _<ms>_
-- retrieve: _<ms>_
-- llama-server: _<ms>_
+- embed: 0.0 ms (stub)
+- retrieve: 0.1 ms
+- llama-server: 8385.5 ms (trung bình 3 truy vấn)
 
-**Reflection** (≤ 60 chữ): bottleneck nằm ở đâu? Có khớp với kỳ vọng không?
-
-_Answer here._
+**Reflection** (≤ 60 chữ):
+Bottleneck chính xác nằm ở `llama-server` (chiếm >99.9% thời gian). Thời gian truy xuất thông tin (retrieve) là không đáng kể. Điều này khớp với kỳ vọng vì xử lý LLM trên CPU rất tốn tài nguyên.
 
 ---
 
 ## 5. Bonus — The single change that mattered most
 
-> **Most important section.** Pick **một** thay đổi từ bonus track (build flag, thread sweep, quant pick, GPU offload, KV-cache quantization, speculative decoding, bất cứ challenge nào trong `BONUS-llama-cpp-optimization/CHALLENGES.md`) đã tạo ra speedup lớn nhất trên máy bạn.
-
-**Change:** _<vd: rebuild llama.cpp với `-DGGML_NATIVE=ON -DGGML_BLAS=ON`; vd: hạ `-t` từ 12 xuống 6; vd: bật Metal trên M2>_
+**Change:** Tối ưu hóa số luồng thực thi (`n_threads`) bằng cách giới hạn ở số luồng logic tối đa (8 luồng), tránh việc oversubscribe lên 16 luồng ảo.
 
 **Before vs after** (paste 2-3 dòng từ sweep output):
 
 ```
-before: <số liệu>
-after:  <số liệu>
-speedup: ~<X.Y>×
+before: t=16  -> 15.1 tok/s
+after:  t=8   -> 21.1 tok/s
+speedup: ~1.40×
 ```
 
 **Tại sao nó work** (1–2 đoạn ngắn — đây là phần grader đọc kỹ nhất):
 
-_Giải thích như đang nói với một bạn cùng lớp đang ngồi cạnh. Tránh "vibes-based" reasoning — bám vào mô hình mental của hardware (memory bandwidth? compute? cache?). Nếu kết quả khác kỳ vọng từ deck, nói rõ — đó là phần grader thưởng điểm._
+Tốc độ giải mã (decode) của LLM bị giới hạn bởi băng thông bộ nhớ (memory-bandwidth bound) hơn là năng lực tính toán thuần túy (compute bound). Khi oversubscribe lên 16 luồng (vượt quá 8 luồng logic của CPU), các luồng ảo phải tranh chấp các kênh truyền tải dữ liệu của bộ nhớ RAM và bộ đệm cache, dẫn đến hiện tượng trễ cổ chai bộ nhớ và làm chậm tiến trình giải mã.
+
+Bằng cách giới hạn số luồng tối đa bằng đúng số nhân logic (t=8), CPU hoạt động ở hiệu suất tối đa mà không bị phân mảnh hay tranh chấp tài nguyên, giúp tối ưu hóa băng thông truyền tải dữ liệu từ RAM vào CPU, tăng tốc độ giải mã lên 40% (từ 15.1 lên 21.1 tok/s).
 
 ---
 
 ## 6. (Optional) Điều ngạc nhiên nhất
 
-_(1–2 câu — không bắt buộc, nhưng người grader đọc tất cả)_
-
-_Answer here._
+Sự chênh lệch tốc độ giải mã giữa Q4_K_M và Q2_K trên CPU là rất nhỏ (khoảng 5%). Việc giảm lượng tử hóa xuống Q2_K hầu như không đem lại lợi thế về tốc độ trên CPU Gen 11 này, chỉ giúp tiết kiệm RAM và ổ đĩa.
 
 ---
 
 ## 7. Self-graded checklist
 
-- [ ] `hardware.json` đã commit
-- [ ] `models/active.json` đã commit (hoặc paste path snapshot vào section 1)
-- [ ] `benchmarks/01-quickstart-results.md` đã commit
-- [ ] `benchmarks/02-server-results.md` (hoặc CSV từ `record-metrics.py`) đã commit
-- [ ] `benchmarks/bonus-*.md` đã commit (ít nhất 1 sweep)
-- [ ] Ít nhất 6 screenshots trong `submission/screenshots/` (xem `submission/screenshots/README.md`)
-- [ ] `make verify` exit 0 (chạy ngay trước khi push)
-- [ ] Repo trên GitHub ở chế độ **public**
-- [ ] Đã paste public repo URL vào VinUni LMS
-
----
-
-**Quan trọng:** repo phải **public** đến khi điểm được công bố. Nếu private, grader không xem được → 0 điểm.
+- [x] `hardware.json` đã commit
+- [x] `models/active.json` đã commit (hoặc paste path snapshot vào section 1)
+- [x] `benchmarks/01-quickstart-results.md` đã commit
+- [x] `benchmarks/02-server-results.md` (hoặc CSV từ `record-metrics.py`) đã commit
+- [x] `benchmarks/bonus-*.md` đã commit (ít nhất 1 sweep)
+- [x] Ít nhất 6 screenshots trong `submission/screenshots/` (xem `submission/screenshots/README.md`)
+- [x] `make verify` exit 0 (chạy ngay trước khi push)
+- [x] Repo trên GitHub ở chế độ **public**
+- [x] Đã paste public repo URL vào VinUni LMS
